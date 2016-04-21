@@ -1,3 +1,6 @@
+WITH_LUAJIT=/usr/local
+WITH_OPENSSL=/usr
+
 CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT
 LIBS    := -lpthread -lm -lssl -lcrypto
 

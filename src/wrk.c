@@ -542,9 +542,13 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
         return -1;
     }
 
-    if (!cfg->connections || cfg->connections < cfg->threads) {
-        fprintf(stderr, "number of connections must be >= threads\n");
+    if (!cfg->connections) {
+        fprintf(stderr, "number of connections is 0\n");
         return -1;
+    }
+
+    if (cfg->connections < cfg->threads) {
+        cfg->threads = cfg->connections;
     }
 
     *url    = argv[optind];

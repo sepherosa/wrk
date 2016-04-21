@@ -138,7 +138,14 @@ int main(int argc, char **argv) {
 
     char *time = format_time_s(cfg.duration);
     printf("Running %s test @ %s\n", time, url);
-    printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
+    if (cfg.connreqs == UINT64_MAX) {
+        printf("  %"PRIu64" threads and %"PRIu64" connections\n",
+            cfg.threads, cfg.connections);
+    } else {
+        printf("  %"PRIu64" threads and %"PRIu64" connections, "
+            "%"PRIu64" requests/connection\n",
+            cfg.threads, cfg.connections, cfg.connreqs);
+    }
 
     uint64_t start    = time_us();
     uint64_t complete = 0;

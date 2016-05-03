@@ -14,6 +14,7 @@ static struct config {
     bool     delay;
     bool     dynamic;
     bool     latency;
+    bool     tcp_nodelay;
     char    *host;
     char    *script;
     SSL_CTX *ctx;
@@ -266,8 +267,10 @@ static int connect_socket(thread *thread, connection *c) {
         if (errno != EINPROGRESS) goto error;
     }
 
-    flags = 1;
-    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
+    if (cfg.tcp_nodelay) {
+        flags = 1;
+        setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
+    }
 
     flags = AE_READABLE | AE_WRITABLE;
     if (aeCreateFileEvent(loop, fd, flags, socket_connected, c) == AE_OK) {
@@ -497,6 +500,7 @@ static struct option longopts[] = {
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
     { "connreqs",    required_argument, NULL, 'C' },
+    { "delay",       no_argument,       NULL, 'N' },
     { NULL,          0,                 NULL,  0  }
 };
 
@@ -510,6 +514,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
     cfg->connreqs    = UINT64_MAX;
+    cfg->tcp_nodelay = true;
 
     while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
         switch (c) {
@@ -541,6 +546,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 break;
             case 'C':
                 if (scan_metric(optarg, &cfg->connreqs)) return -1;
+                break;
+            case 'N':
+                cfg->tcp_nodelay = false;
                 break;
             case 'h':
             case '?':

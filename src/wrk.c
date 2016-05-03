@@ -249,10 +249,18 @@ static int connect_socket(thread *thread, connection *c) {
 
     c->requests = 0;
 
+#ifdef SOCK_NONBLOCK
+    fd = socket(addr->ai_family, addr->ai_socktype | SOCK_NONBLOCK, addr->ai_protocol);
+#else	/* !SOCK_NONBLOCK */
     fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
-
+#ifdef FIONBIO
+    flags = 1;
+    ioctl(fd, FIONBIO, &flags, sizeof(flags));
+#else
     flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+#endif
+#endif	/* SOCK_NONBLOCK */
 
     if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
         if (errno != EINPROGRESS) goto error;

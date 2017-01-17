@@ -1,5 +1,11 @@
 // Copyright (C) 2012 - Will Glozer.  All rights reserved.
 
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#include <pthread_np.h>
+#endif
+
 #include "wrk.h"
 #include "script.h"
 #include "main.h"
@@ -15,6 +21,7 @@ static struct config {
     bool     dynamic;
     bool     latency;
     bool     tcp_nodelay;
+    bool     bind_cpu;
     char    *host;
     char    *script;
     SSL_CTX *ctx;
@@ -64,6 +71,10 @@ static void usage() {
 int main(int argc, char **argv) {
     char *url, **headers = zmalloc(argc * sizeof(char *));
     struct http_parser_url parts = {};
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+    int ncpus;
+    size_t len;
+#endif
 
     if (parse_args(&cfg, &url, &parts, headers, argc, argv)) {
         usage();
@@ -102,9 +113,22 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+    len = sizeof(ncpus);
+    if (sysctlbyname("hw.ncpu", &ncpus, &len, NULL, 0)) {
+        fprintf(stderr, "sysctlbyname hw.ncpu failed: %s\n", strerror(errno));
+        exit(1);
+    }
+#endif
+
     cfg.host = host;
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
+        pthread_attr_t attr;
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+        cpu_set_t mask;
+        int cpu, error;
+#endif
         thread *t      = &threads[i];
         t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
         t->connections = cfg.connections / cfg.threads;
@@ -123,11 +147,28 @@ int main(int argc, char **argv) {
             }
         }
 
-        if (!t->loop || pthread_create(&t->thread, NULL, &thread_main, t)) {
+        pthread_attr_init(&attr);
+        if (cfg.bind_cpu) {
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+            CPU_ZERO(&mask);
+            cpu = i % ncpus;
+            CPU_SET(cpu, &mask);
+            error = pthread_attr_setaffinity_np(&attr, sizeof(mask), &mask);
+            if (error) {
+                fprintf(stderr, "pthread_attr_setaffinity_np(cpu%d) failed: "
+                    "%s\n", cpu, strerror(error));
+                exit(1);
+            }
+#endif
+        }
+
+        t->requests = i; /* XXX steal requests as thread id */
+        if (!t->loop || pthread_create(&t->thread, &attr, &thread_main, t)) {
             char *msg = strerror(errno);
             fprintf(stderr, "unable to create thread %"PRIu64": %s\n", i, msg);
             exit(2);
         }
+        pthread_attr_destroy(&attr);
     }
 
     struct sigaction sa = {
@@ -214,6 +255,15 @@ void *thread_main(void *arg) {
 
     char *request = NULL;
     size_t length = 0;
+    char name[16];
+
+    snprintf(name, sizeof(name), "wrkt%zd", thread->requests);
+    thread->requests = 0;
+#ifdef __linux__
+    pthread_setname_np(pthread_self(), name);
+#elif defined(__FreeBSD__) || defined(__DragonFly__)
+    pthread_set_name_np(pthread_self(), name);
+#endif
 
     if (!cfg.dynamic) {
         script_request(thread->L, &request, &length);
@@ -501,6 +551,7 @@ static struct option longopts[] = {
     { "version",     no_argument,       NULL, 'v' },
     { "connreqs",    required_argument, NULL, 'C' },
     { "delay",       no_argument,       NULL, 'N' },
+    { "bindcpu",     no_argument,       NULL, 'B' },
     { NULL,          0,                 NULL,  0  }
 };
 
@@ -516,7 +567,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->connreqs    = UINT64_MAX;
     cfg->tcp_nodelay = true;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:C:H:T:LNrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:C:H:T:BLNrv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -543,6 +594,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
             case 'v':
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());
                 printf("Copyright (C) 2012 Will Glozer\n");
+                break;
+            case 'B':
+                cfg->bind_cpu = true;
                 break;
             case 'C':
                 if (scan_metric(optarg, &cfg->connreqs)) return -1;

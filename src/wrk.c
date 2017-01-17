@@ -516,7 +516,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->connreqs    = UINT64_MAX;
     cfg->tcp_nodelay = true;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:C:H:T:LNrv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;

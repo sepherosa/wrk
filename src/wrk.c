@@ -1,14 +1,18 @@
 // Copyright (C) 2012 - Will Glozer.  All rights reserved.
 
-#if defined(__FreeBSD__) || defined(__DragonFly__)
-#include <sys/types.h>
+#include "wrk.h"
+#include "script.h"
+#include "main.h"
+
+#if defined(__FreeBSD__)
+#include <sys/cpuset.h>
+#include <sys/sysctl.h>
+#include <pthread_np.h>
+#elif defined(__DragonFly__)
 #include <sys/sysctl.h>
 #include <pthread_np.h>
 #endif
 
-#include "wrk.h"
-#include "script.h"
-#include "main.h"
 
 static struct config {
     uint64_t connections;
@@ -126,7 +130,11 @@ int main(int argc, char **argv) {
     for (uint64_t i = 0; i < cfg.threads; i++) {
         pthread_attr_t attr;
 #if defined(__FreeBSD__) || defined(__DragonFly__)
+#ifdef __FreeBSD__
+        cpuset_t mask;
+#else
         cpu_set_t mask;
+#endif
         int cpu, error;
 #endif
         thread *t      = &threads[i];

@@ -1,7 +1,7 @@
 WITH_LUAJIT=/usr/local
-WITH_OPENSSL=/usr
+WITH_OPENSSL=/usr/local
 
-CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT
+CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT -I$(WITH_LUAJIT)/include/luajit-2.0
 LIBS    := -lpthread -lm -lssl -lcrypto
 
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)

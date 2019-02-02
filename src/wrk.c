@@ -57,9 +57,11 @@ static void handler(int sig) {
 static void usage() {
     printf("Usage: wrk <options> <url>                            \n"
            "  Options:                                            \n"
+           "    -B, --bindcpu          Bind threads to CPUs       \n"
            "    -c, --connections <N>  Connections to keep open   \n"
-           "        --connreqs    <N>  Max number of requests per connection\n"
+           "    -C, --connreqs    <N>  Max number of requests per connection\n"
            "    -d, --duration    <T>  Duration of test           \n"
+           "    -N, --delay            Disable TCP_NODELAY        \n"
            "    -t, --threads     <N>  Number of threads to use   \n"
            "                                                      \n"
            "    -s, --script      <S>  Load Lua script file       \n"
